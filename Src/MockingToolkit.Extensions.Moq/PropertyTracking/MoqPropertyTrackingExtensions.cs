@@ -98,80 +98,88 @@ namespace MockingToolkit.Extensions.Moq.PropertyTracking
             {
                 if (propertyInfo.CanRead)
                 {
-                    var getMethod = propertyInfo.GetGetMethod();
-                    if (getMethod != null)
-                    {
-                        var returnType = getMethod.ReturnType;
-                        var setupGetMethod = typeof(Mock<T>).GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                            .FirstOrDefault(m => m.Name == "SetupGet" && m.GetParameters().Length == 1);
-                        var genericSetupGetMethod = setupGetMethod?.MakeGenericMethod(returnType);
-
-                        var lambdaExpression = Expression.Lambda(
-                            Expression.Property(Expression.Parameter(mockType, "m"), propertyInfo),
-                            Expression.Parameter(mockType, "m")
-                        );
-                        var setup = genericSetupGetMethod?.Invoke(mock, new object[] { lambdaExpression });
-
-                        var returnsMethod = setup?.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                            .FirstOrDefault(m => m.Name == "Returns" && m.GetParameters().Length == 1);
-
-                        // Fix: Create a strongly-typed delegate matching the property's return type
-                        var returnsDelegate = (Func<string>)(() =>
-                        {
-                            var value = tracker.GetValue(propertyInfo.Name);
-                            tracker.RecordGet(propertyInfo.Name, value);
-                            return (string)value;
-                        });
-
-                        returnsMethod?.Invoke(setup, new object[] { returnsDelegate });
-
-                        // Ensure backing field is initialized on read
-                        var callbackMethod = setup?.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                            .FirstOrDefault(m => m.Name == "Callback" && m.GetParameters().Length == 1);
-                        var callbackAction = new Action(() =>
-                        {
-                            if (!tracker.BackingFields.ContainsKey(propertyInfo.Name))
-                            {
-                                tracker.RegisterProperty(propertyInfo.Name, propertyInfo.PropertyType);
-                            }
-                        });
-                        callbackMethod?.Invoke(setup, new object[] { callbackAction });
-                    }
+                    TrackReadProperty(mock, mockType, propertyInfo, tracker);
                 }
-
-
 
                 if (propertyInfo.CanWrite)
                 {
-                    var setMethod = propertyInfo.GetSetMethod();
-                    if (setMethod != null)
-                    {
-                        var parameterType = setMethod.GetParameters().First().ParameterType;
-                        var setupSetMethod = typeof(Mock<T>).GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                            .FirstOrDefault(m => m.Name == "SetupSet" && m.GetParameters().Length == 1);
-                        var genericSetupSetMethod = setupSetMethod?.MakeGenericMethod(parameterType);
-
-                        var lambdaExpression = Expression.Lambda(Expression.Property(Expression.Parameter(mockType, "m"), propertyInfo), Expression.Parameter(mockType, "m"));
-                        var setup = genericSetupSetMethod?.Invoke(mock, new object[] { lambdaExpression });
-
-                        var callbackMethod = setup?.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                            .FirstOrDefault(m => m.Name == "Callback" && m.GetParameters().Length == 1);
-                        var callbackActionType = typeof(Action<>).MakeGenericType(parameterType);
-                        var callbackAction = Delegate.CreateDelegate(callbackActionType, new Action<object>((value) =>
-                        {
-                            tracker.SetValue(propertyInfo.Name, value);
-                            tracker.RecordSet(propertyInfo.Name, value);
-                        }), "Invoke");
-                        callbackMethod?.Invoke(setup, new object[] { callbackAction });
-
-                        // Ensure CallBase for setters
-                        var callBaseProperty = setup?.GetType().GetProperty("CallBase");
-                        callBaseProperty?.SetValue(setup, true);
-                    }
+                    TrackWriteProperty(mock, mockType, propertyInfo, tracker);
                 }
 
                 // Ensure backing field registration
                 tracker.RegisterProperty(propertyInfo.Name, propertyInfo.PropertyType);
+            }
+        }
+
+        private static void TrackReadProperty<T>(Mock<T> mock, Type mockType, PropertyInfo propertyInfo, PropertyTracker tracker) where T : class
+        {
+            var getMethod = propertyInfo.GetGetMethod();
+            if (getMethod != null)
+            {
+                var returnType = getMethod.ReturnType;
+                var setupGetMethod = typeof(Mock<T>).GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .FirstOrDefault(m => m.Name == "SetupGet" && m.GetParameters().Length == 1);
+                var genericSetupGetMethod = setupGetMethod?.MakeGenericMethod(returnType);
+
+                var lambdaExpression = Expression.Lambda(
+                    Expression.Property(Expression.Parameter(mockType, "m"), propertyInfo),
+                    Expression.Parameter(mockType, "m")
+                );
+                var setup = genericSetupGetMethod?.Invoke(mock, new object[] { lambdaExpression });
+
+                var returnsMethod = setup?.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .FirstOrDefault(m => m.Name == "Returns" && m.GetParameters().Length == 1);
+
+                // Fix: Create a strongly-typed delegate matching the property's return type
+                var returnsDelegate = (Func<string>)(() =>
+                {
+                    var value = tracker.GetValue(propertyInfo.Name);
+                    tracker.RecordGet(propertyInfo.Name, value);
+                    return (string)value;
+                });
+
+                returnsMethod?.Invoke(setup, new object[] { returnsDelegate });
+
+                // Ensure backing field is initialized on read
+                var callbackMethod = setup?.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .FirstOrDefault(m => m.Name == "Callback" && m.GetParameters().Length == 1);
+                var callbackAction = new Action(() =>
+                {
+                    if (!tracker.BackingFields.ContainsKey(propertyInfo.Name))
+                    {
+                        tracker.RegisterProperty(propertyInfo.Name, propertyInfo.PropertyType);
+                    }
+                });
+                callbackMethod?.Invoke(setup, new object[] { callbackAction });
+            }
+        }
+
+        private static void TrackWriteProperty<T>(Mock<T> mock, Type mockType, PropertyInfo propertyInfo, PropertyTracker tracker) where T : class
+        {
+            var setMethod = propertyInfo.GetSetMethod();
+            if (setMethod != null)
+            {
+                var parameterType = setMethod.GetParameters().First().ParameterType;
+                var setupSetMethod = typeof(Mock<T>).GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .FirstOrDefault(m => m.Name == "SetupSet" && m.GetParameters().Length == 1);
+                var genericSetupSetMethod = setupSetMethod?.MakeGenericMethod(parameterType);
+
+                var lambdaExpression = Expression.Lambda(Expression.Property(Expression.Parameter(mockType, "m"), propertyInfo), Expression.Parameter(mockType, "m"));
+                var setup = genericSetupSetMethod?.Invoke(mock, new object[] { lambdaExpression });
+
+                var callbackMethod = setup?.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .FirstOrDefault(m => m.Name == "Callback" && m.GetParameters().Length == 1);
+                var callbackActionType = typeof(Action<>).MakeGenericType(parameterType);
+                var callbackAction = Delegate.CreateDelegate(callbackActionType, new Action<object>((value) =>
+                {
+                    tracker.SetValue(propertyInfo.Name, value);
+                    tracker.RecordSet(propertyInfo.Name, value);
+                }), "Invoke");
+                callbackMethod?.Invoke(setup, new object[] { callbackAction });
+
+                // Ensure CallBase for setters
+                var callBaseProperty = setup?.GetType().GetProperty("CallBase");
+                callBaseProperty?.SetValue(setup, true);
             }
         }
     }
