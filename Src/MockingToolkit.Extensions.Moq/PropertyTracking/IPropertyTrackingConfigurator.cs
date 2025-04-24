@@ -5,36 +5,70 @@ using System.Reflection;
 
 namespace MockingToolkit.Extensions.Moq.PropertyTracking
 {
-    // IPropertyTrackingConfigurator.cs
     /// <summary>
-    /// Defines an interface for configuring property tracking options.
+    /// Defines a fluent API for configuring property tracking options.
     /// </summary>
-    public interface IPropertyTrackingConfigurator
+    public interface IPropertyTrackingConfigurator : IDisposable
     {
         /// <summary>
-        /// Configures the tracking to include all readable and writable properties.
+        /// Includes specified properties in the tracking process by their names.
         /// </summary>
-        /// <returns>The current <see cref="IPropertyTrackingConfigurator"/> instance for chaining.</returns>
-        IPropertyTrackingConfigurator TrackAll();
+        /// <param name="propertyNames">An array of property names to be included.</param>
+        /// <returns>The current instance of the configurator for fluent chaining.</returns>
+        IPropertyTrackingConfigurator IncludeProperties(params string[] propertyNames);
 
         /// <summary>
-        /// Configures the tracking to include the specified property names.
+        /// Includes properties that match the specified predicate in the tracking process.
         /// </summary>
-        /// <param name="propertyNames">An array of property names to track.</param>
-        /// <returns>The current <see cref="IPropertyTrackingConfigurator"/> instance for chaining.</returns>
-        IPropertyTrackingConfigurator TrackProperties(params string[] propertyNames);
+        /// <param name="predicate">A function that defines the filtering criteria for properties to be included.</param>
+        /// <returns>The current instance of the configurator for fluent chaining.</returns>
+        IPropertyTrackingConfigurator IncludeProperties(Func<PropertyInfo, bool> predicate);
 
         /// <summary>
-        /// Configures the tracking to include properties that satisfy the provided predicate.
+        /// Excludes specified properties from the tracking process by their names.
         /// </summary>
-        /// <param name="predicate">A function that takes a <see cref="PropertyInfo"/> and returns <c>true</c> if the property should be tracked, <c>false</c> otherwise.</param>
-        /// <returns>The current <see cref="IPropertyTrackingConfigurator"/> instance for chaining.</returns>
-        IPropertyTrackingConfigurator TrackProperties(Func<PropertyInfo, bool> predicate);
+        /// <param name="propertyNames">An array of property names to be excluded.</param>
+        /// <returns>The current instance of the configurator for fluent chaining.</returns>
+        IPropertyTrackingConfigurator ExcludeProperties(params string[] propertyNames);
 
         /// <summary>
-        /// Builds the <see cref="PropertyTrackingOptions"/> based on the current configuration.
+        /// Excludes properties that match the specified predicate from the tracking process.
         /// </summary>
-        /// <returns>A new instance of <see cref="PropertyTrackingOptions"/>.</returns>
+        /// <param name="predicate">A function that defines the filtering criteria for properties to be excluded.</param>
+        /// <returns>The current instance of the configurator for fluent chaining.</returns>
+        IPropertyTrackingConfigurator ExcludeProperties(Func<PropertyInfo, bool> predicate);
+
+        /// <summary>
+        /// Configures a custom formatter for property values during tracking.
+        /// </summary>
+        /// <param name="formatter">A function that formats property values into strings.</param>
+        /// <returns>The current instance of the configurator for fluent chaining.</returns>
+        IPropertyTrackingConfigurator WithValueFormatter(Func<object?, string> formatter);
+
+        /// <summary>
+        /// Configures a custom access filter for properties during tracking.
+        /// </summary>
+        /// <param name="filter">A function that defines the access filter logic for properties.</param>
+        /// <returns>The current instance of the configurator for fluent chaining.</returns>
+        IPropertyTrackingConfigurator WithAccessFilter(Func<PropertyInfo, bool> filter);
+
+        /// <summary>
+        /// Specifies the access type for properties during tracking.
+        /// </summary>
+        /// <param name="accessType">The type of access to be configured for properties.</param>
+        /// <returns>The current instance of the configurator for fluent chaining.</returns>
+        IPropertyTrackingConfigurator WithAccess(PropertyAccessType accessType);
+
+        /// <summary>
+        /// Clears all tracking configurations, resetting the configurator to its default state.
+        /// </summary>
+        /// <returns>The current instance of the configurator for fluent chaining.</returns>
+        IPropertyTrackingConfigurator Clear();
+
+        /// <summary>
+        /// Builds and returns the configured <see cref="PropertyTrackingOptions"/>.
+        /// </summary>
+        /// <returns>A <see cref="PropertyTrackingOptions"/> instance with the configured tracking settings.</returns>
         PropertyTrackingOptions Build();
     }
 }

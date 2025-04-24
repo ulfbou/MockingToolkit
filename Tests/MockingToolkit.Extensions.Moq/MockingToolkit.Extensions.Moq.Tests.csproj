@@ -24,12 +24,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Using Include="Xunit" />
+	  <ProjectReference Include="..\..\Src\MockingToolkit.Extensions.Moq\MockingToolkit.Extensions.Moq.csproj" />
+	  <ProjectReference Include="..\..\Src\MockingToolkit\MockingToolkit.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\Src\MockingToolkit.Extensions.Moq\MockingToolkit.Extensions.Moq.csproj" />
-		<ProjectReference Include="..\..\Src\MockingToolkit\MockingToolkit.csproj" />
+		<Using Include="Xunit" />
 	</ItemGroup>
 
 </Project>

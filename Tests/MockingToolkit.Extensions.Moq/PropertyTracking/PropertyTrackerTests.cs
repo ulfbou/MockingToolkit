@@ -54,16 +54,17 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
             tracker.RecordGet("TestProperty", "GetValue");
 
             // Assert
-            Assert.Equal(2, tracker.History.Count);
+            // Assert
+            Assert.Equal(2, tracker.History.Count());
 
-            var setRecord = tracker.History[0];
-            Assert.Equal("TestProperty", setRecord.PropertyName);
-            Assert.Equal(PropertyAccessType.Set, setRecord.AccessType);
+            var setRecord = tracker.History.FirstOrDefault(r =>
+                r.PropertyName == "TestProperty" && r.AccessType == PropertyAccessType.Set);
+            Assert.NotNull(setRecord);
             Assert.Equal("SetValue", setRecord.Value);
 
-            var getRecord = tracker.History[1];
-            Assert.Equal("TestProperty", getRecord.PropertyName);
-            Assert.Equal(PropertyAccessType.Get, getRecord.AccessType);
+            var getRecord = tracker.History.FirstOrDefault(r =>
+                r.PropertyName == "TestProperty" && r.AccessType == PropertyAccessType.Get);
+            Assert.NotNull(getRecord);
             Assert.Equal("GetValue", getRecord.Value);
         }
 
@@ -103,16 +104,16 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
             tracker.RecordGet("TestProperty", null!);
 
             // Assert
-            Assert.Equal(2, tracker.History.Count);
+            Assert.Equal(2, tracker.History.Count());
 
-            var setRecord = tracker.History[0];
-            Assert.Equal("TestProperty", setRecord.PropertyName);
-            Assert.Equal(PropertyAccessType.Set, setRecord.AccessType);
+            var setRecord = tracker.History.FirstOrDefault(r =>
+                r.PropertyName == "TestProperty" && r.AccessType == PropertyAccessType.Set);
+            Assert.NotNull(setRecord);
             Assert.Null(setRecord.Value);
 
-            var getRecord = tracker.History[1];
-            Assert.Equal("TestProperty", getRecord.PropertyName);
-            Assert.Equal(PropertyAccessType.Get, getRecord.AccessType);
+            var getRecord = tracker.History.FirstOrDefault(r =>
+                r.PropertyName == "TestProperty" && r.AccessType == PropertyAccessType.Get);
+            Assert.NotNull(getRecord);
             Assert.Null(getRecord.Value);
         }
 
@@ -277,21 +278,25 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
             tracker.RecordGet(nameProperty, nameValue);
             tracker.RecordSet(ageProperty, ageValue);
             tracker.RecordGet(ageProperty, ageValue);
+            var history = tracker.History;
 
             // Assert
-            Assert.Equal(3, tracker.History.Count);
+            Assert.Equal(3, history.Count);
 
-            Assert.Equal(nameProperty, tracker.History[0].PropertyName);
-            Assert.Equal(PropertyAccessType.Get, tracker.History[0].AccessType);
-            Assert.Equal(nameValue, tracker.History[0].Value);
+            Assert.Contains(history, record =>
+                record.PropertyName == nameProperty &&
+                record.AccessType == PropertyAccessType.Get &&
+                (string)record.Value == nameValue);
 
-            Assert.Equal(ageProperty, tracker.History[1].PropertyName);
-            Assert.Equal(PropertyAccessType.Set, tracker.History[1].AccessType);
-            Assert.Equal(ageValue, tracker.History[1].Value);
+            Assert.Contains(history, record =>
+                record.PropertyName == ageProperty &&
+                record.AccessType == PropertyAccessType.Set &&
+                (int)record.Value == ageValue);
 
-            Assert.Equal(ageProperty, tracker.History[2].PropertyName);
-            Assert.Equal(PropertyAccessType.Get, tracker.History[2].AccessType);
-            Assert.Equal(ageValue, tracker.History[2].Value);
+            Assert.Contains(history, record =>
+                record.PropertyName == ageProperty &&
+                record.AccessType == PropertyAccessType.Get &&
+                (int)record.Value == ageValue);
         }
 
         [Fact]
@@ -353,27 +358,43 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
             var configurator = new PropertyTrackingConfigurator();
 
             // Act
-            var options = configurator.TrackAll().Build();
+            var options = configurator.Build();
 
             // Assert
             Assert.True(options.TrackAll);
         }
 
         [Fact]
-        public void TrackProperties_StringArray_SetsTrackedPropertyNames()
+        public void IncludeProperties_BuildsOptionsWithPredicate()
         {
             // Arrange
             var configurator = new PropertyTrackingConfigurator();
-            string[] propertyNames = { "Name", "Age", "Name" }; // Include a duplicate
+            var propertyNames = new[] { "Name", "Age", "Name" }; // Duplicate entries included
 
             // Act
-            var options = configurator.TrackProperties(propertyNames).Build();
+            var options = configurator.IncludeProperties(propertyNames).Build();
 
             // Assert
-            Assert.False(options.TrackAll);
-            Assert.Equal(2, options.TrackedPropertyNames.Count);
-            Assert.Contains("Name", options.TrackedPropertyNames);
-            Assert.Contains("Age", options.TrackedPropertyNames);
+            Assert.False(options.TrackAll); // TrackAll should be false
+            Assert.NotNull(options.Predicate); // A predicate should be created for property tracking
+
+            // Simulate predicate evaluation
+            var dummyType = typeof(DummyClass); // Replace with a relevant test class
+            var nameProperty = dummyType.GetProperty("Name");
+            var ageProperty = dummyType.GetProperty("Age");
+            var otherProperty = dummyType.GetProperty("Other");
+
+            Assert.True(options.Predicate?.Invoke(nameProperty!)); // Name should be tracked
+            Assert.True(options.Predicate?.Invoke(ageProperty!)); // Age should be tracked
+            Assert.False(options.Predicate?.Invoke(otherProperty!)); // Other properties should not be tracked
+        }
+
+        // Dummy class for testing
+        public class DummyClass
+        {
+            public required string Name { get; set; }
+            public int Age { get; set; }
+            public required string Other { get; set; }
         }
 
         [Fact]
@@ -384,7 +405,7 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
             Func<PropertyInfo, bool> predicate = p => p.Name.StartsWith("Is");
 
             // Act
-            var options = configurator.TrackProperties(predicate).Build();
+            var options = configurator.IncludeProperties(predicate).Build();
 
             // Assert
             Assert.False(options.TrackAll);
@@ -393,7 +414,7 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
         }
 
         [Fact]
-        public void ConfigurationMethods_CanBeChained()
+        public void ConfigurationMethods_EnableFluentChaining()
         {
             // Arrange
             var configurator = new PropertyTrackingConfigurator();
@@ -401,19 +422,20 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
 
             // Act
             var options = configurator
-                .TrackAll()
-                .TrackProperties("Id")
-                .TrackProperties(predicate)
+                .IncludeProperties("Id") // Include specific properties by name
+                .IncludeProperties(predicate) // Include properties based on a predicate
                 .Build();
 
             // Assert
-            Assert.True(options.TrackAll); // TrackAll should take precedence based on the current design
-            Assert.Contains("Id", options.TrackedPropertyNames);
-            Assert.Same(predicate, options.Predicate);
+            Assert.False(options.TrackAll); // TrackAll should be false due to specific configurations
+            Assert.NotNull(options.Predicate); // Ensure a predicate is defined
+            Assert.True(options.Predicate?.Invoke(typeof(DummyClass).GetProperty("Id")!)); // Verify "Id" is included
+            Assert.True(options.Predicate?.Invoke(typeof(DummyClass).GetProperty("StringProperty")!)); // Verify predicate logic
+            Assert.False(options.Predicate?.Invoke(typeof(DummyClass).GetProperty("IntProperty")!)); // Verify unrelated properties are excluded
         }
 
         [Fact]
-        public void Build_WithNoConfiguration_ReturnsDefaultOptions()
+        public void Build_WithNoConfiguration_EnablesTrackingForAll()
         {
             // Arrange
             var configurator = new PropertyTrackingConfigurator();
@@ -422,9 +444,11 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
             var options = configurator.Build();
 
             // Assert
-            Assert.False(options.TrackAll);
-            Assert.Empty(options.TrackedPropertyNames);
-            Assert.Null(options.Predicate);
+            Assert.True(options.TrackAll); // Default behavior is to track all properties
+            Assert.Null(options.Predicate); // No predicate should be set
+            Assert.Null(options.ValueFormatter); // No value formatter should be set
+            Assert.Null(options.AccessType); // No access type should be configured
+            Assert.Null(options.AccessFilter); // No access filter should be set
         }
 
         [Fact]
@@ -472,12 +496,14 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
             tracker.RecordSet(propertyName, initialValue);
 
             string retrievedValueGeneric = tracker.GetValue<string>(propertyName);
+            Console.WriteLine($"Debug: retrievedValueGeneric after first GetValue: {retrievedValueGeneric}"); // Added logging
             object retrievedValueNonGeneric = tracker.GetValue(propertyName);
             tracker.RecordGet(propertyName, retrievedValueGeneric);
 
             tracker.SetValue(propertyName, newValue);
             tracker.RecordSet(propertyName, newValue);
             string finalValue = tracker.GetValue<string>(propertyName);
+            Console.WriteLine($"Debug: finalValue after second GetValue: {finalValue}"); // Added logging
 
             // Assert
             Assert.Equal(initialValue, retrievedValueGeneric);

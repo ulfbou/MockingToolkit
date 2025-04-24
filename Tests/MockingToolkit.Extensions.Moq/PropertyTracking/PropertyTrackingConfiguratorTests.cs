@@ -1,9 +1,9 @@
 ﻿//// Copyright (c) Ulf Bourelius. All rights reserved.
 //// Licensed under the MIT License. See LICENSE in the project root for license information.
 
-using System.Reflection;
-
 using MockingToolkit.Extensions.Moq.PropertyTracking;
+
+using System.Reflection;
 
 namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
 {
@@ -16,27 +16,28 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
             var configurator = new PropertyTrackingConfigurator();
 
             // Act
-            var options = configurator.TrackAll().Build();
+            var options = configurator.Build();
 
             // Assert
             Assert.True(options.TrackAll);
         }
 
         [Fact]
-        public void TrackProperties_StringArray_SetsTrackedPropertyNames()
+        public void TrackProperties_StringArray_SetsIncludedProperties()
         {
             // Arrange
             var configurator = new PropertyTrackingConfigurator();
             string[] propertyNames = { "Name", "Age", "Name" }; // Include a duplicate
 
             // Act
-            var options = configurator.TrackProperties(propertyNames).Build();
+            var options = configurator.IncludeProperties(propertyNames).Build();
 
             // Assert
             Assert.False(options.TrackAll);
-            Assert.Equal(2, options.TrackedPropertyNames.Count);
-            Assert.Contains("Name", options.TrackedPropertyNames);
-            Assert.Contains("Age", options.TrackedPropertyNames);
+            Assert.True(options.Predicate != null);
+            Assert.True(options.Predicate(new PropertyInfoStub("Name")));
+            Assert.True(options.Predicate(new PropertyInfoStub("Age")));
+            Assert.False(options.Predicate(new PropertyInfoStub("OtherProperty")));
         }
 
         [Fact]
@@ -47,12 +48,13 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
             Func<PropertyInfo, bool> predicate = p => p.Name.StartsWith("Is");
 
             // Act
-            var options = configurator.TrackProperties(predicate).Build();
+            var options = configurator.IncludeProperties(predicate).Build();
 
             // Assert
             Assert.False(options.TrackAll);
             Assert.NotNull(options.Predicate);
-            Assert.Same(predicate, options.Predicate); // Ensure it's the same instance
+            Assert.True(options.Predicate(new PropertyInfoStub("IsEnabled")));
+            Assert.False(options.Predicate(new PropertyInfoStub("Name")));
         }
 
         [Fact]
@@ -64,15 +66,18 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
 
             // Act
             var options = configurator
-                .TrackAll()
-                .TrackProperties("Id")
-                .TrackProperties(predicate)
+                .IncludeProperties("Id")
+                .IncludeProperties(predicate)
+                .WithAccess(PropertyAccessType.Get)
                 .Build();
 
             // Assert
-            Assert.True(options.TrackAll); // TrackAll should take precedence based on the current design
-            Assert.Contains("Id", options.TrackedPropertyNames);
-            Assert.Same(predicate, options.Predicate);
+            Assert.False(options.TrackAll);
+            Assert.NotNull(options.Predicate);
+            Assert.True(options.Predicate(new PropertyInfoStub("Id")));
+            Assert.True(options.Predicate(new PropertyInfoStub("Name", typeof(string))));
+            Assert.False(options.Predicate(new PropertyInfoStub("Age", typeof(int))));
+            Assert.Equal(PropertyAccessType.Get, options.AccessType);
         }
 
         [Fact]
@@ -85,9 +90,9 @@ namespace MockingToolkit.Extensions.Moq.Tests.PropertyTracking
             var options = configurator.Build();
 
             // Assert
-            Assert.False(options.TrackAll);
-            Assert.Empty(options.TrackedPropertyNames);
+            Assert.True(options.TrackAll);
             Assert.Null(options.Predicate);
+            Assert.Null(options.AccessType);
         }
     }
 }

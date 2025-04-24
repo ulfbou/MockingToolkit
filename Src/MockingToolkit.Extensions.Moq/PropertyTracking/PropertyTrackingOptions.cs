@@ -5,29 +5,81 @@ using System.Reflection;
 
 namespace MockingToolkit.Extensions.Moq.PropertyTracking
 {
-    /// <summary>
-    /// Defines the options for property tracking.
-    /// </summary>
-    public class PropertyTrackingOptions
+    public sealed record PropertyTrackingOptions(
+        bool TrackAll = true,
+        IReadOnlySet<string>? IncludedProperties = null,
+        IReadOnlySet<string>? ExcludedProperties = null,
+        Func<PropertyInfo, bool>? Predicate = null,
+        Func<object?, string>? ValueFormatter = null,
+        PropertyAccessType? AccessType = null,
+        Func<PropertyInfo, bool>? AccessFilter = null)
     {
-        /// <summary>
-        /// Gets or sets a value indicating whether all readable and writable properties should be tracked.
-        /// Defaults to <c>false</c>.
-        /// </summary>
-        public bool TrackAll { get; set; }
+        internal bool ShouldTrackProperty<T>(string propertyName)
+        {
+            return ShouldTrackProperty(propertyName, typeof(T));
+        }
 
-        /// <summary>
-        /// Gets or sets a collection of property names to be tracked.
-        /// This is considered only if <see cref="TrackAll"/> is <c>false</c>.
-        /// Defaults to an empty read-only collection.
-        /// </summary>
-        public IReadOnlyCollection<string> TrackedPropertyNames { get; set; } = new List<string>();
+        internal bool ShouldTrackProperty<T>(PropertyInfo property)
+        {
+            return property.DeclaringType == typeof(T) && ShouldTrackProperty(property.Name, typeof(T));
+        }
 
-        /// <summary>
-        /// Gets or sets a predicate that determines whether a property should be tracked based on its <see cref="PropertyInfo"/>.
-        /// This is considered only if <see cref="TrackAll"/> is <c>false</c> and the property name is not in <see cref="TrackedPropertyNames"/>.
-        /// Defaults to <c>null</c>.
-        /// </summary>
-        public Func<PropertyInfo, bool>? Predicate { get; set; }
+        internal bool ShouldTrackProperty(PropertyInfo p)
+        {
+            if (p == null)
+                throw new ArgumentNullException(nameof(p));
+
+            if (p.DeclaringType == null)
+                throw new ArgumentException("Property does not have a declaring type.", nameof(p));
+
+            if (TrackAll)
+                return true;
+
+            if (Predicate != null)
+                return Predicate(p);
+
+            if (AccessFilter != null && AccessFilter(p))
+                return true;
+
+            return false;
+        }
+
+        internal bool ShouldTrackProperty(string propertyName, Type type)
+        {
+            if (string.IsNullOrWhiteSpace(propertyName))
+                throw new ArgumentNullException(nameof(propertyName));
+            if (type == null)
+                throw new ArgumentNullException(nameof(type));
+            if (TrackAll)
+                return true;
+            if (Predicate != null)
+            {
+                var property = type.GetProperty(propertyName) ?? throw new ArgumentException("Property not found.", nameof(propertyName));
+                return Predicate(property);
+            }
+            if (AccessFilter != null)
+            {
+                var property = type.GetProperty(propertyName);
+                if (property != null && AccessFilter(property))
+                    return true;
+            }
+            return false;
+        }
+
+        internal bool CanTrackForRead(PropertyInfo prop)
+        {
+            if (prop == null)
+                throw new ArgumentNullException(nameof(prop));
+
+            return AccessType == null || AccessType == PropertyAccessType.Get;
+        }
+
+        internal bool CanTrackForWrite(PropertyInfo prop)
+        {
+            if (prop == null)
+                throw new ArgumentNullException(nameof(prop));
+
+            return AccessType == null || AccessType == PropertyAccessType.Set;
+        }
     }
 }
