@@ -1,6 +1,8 @@
 ﻿//// Copyright (c) Ulf Bourelius. All rights reserved.
 //// Licensed under the MIT License. See LICENSE in the project root for license information.
 
+using System.Collections.Frozen;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Reflection;
 
@@ -30,6 +32,10 @@ namespace MockingToolkit.PropertyTracking
         {
             foreach (var name in propertyNames ?? [])
             {
+                if (_excludedProperties.Contains(name))
+                {
+                    throw new InvalidTrackingConfigurationException($"Property '{name}' cannot be both included and excluded.");
+                }
                 _includedProperties.Add(name);
             }
             return this;
@@ -59,6 +65,10 @@ namespace MockingToolkit.PropertyTracking
         {
             foreach (var name in propertyNames ?? [])
             {
+                if (_includedProperties.Contains(name))
+                {
+                    throw new InvalidTrackingConfigurationException($"Property '{name}' cannot be both included and excluded.");
+                }
                 _excludedProperties.Add(name);
             }
             return this;
@@ -88,6 +98,10 @@ namespace MockingToolkit.PropertyTracking
         {
             foreach (var name in fieldNames ?? [])
             {
+                if (_excludedFields.Contains(name))
+                {
+                    throw new InvalidTrackingConfigurationException($"Field '{name}' cannot be both included and excluded.");
+                }
                 _includedFields.Add(name);
             }
             return this;
@@ -117,6 +131,10 @@ namespace MockingToolkit.PropertyTracking
         {
             foreach (var name in fieldNames ?? [])
             {
+                if (_includedFields.Contains(name))
+                {
+                    throw new InvalidTrackingConfigurationException($"Field '{name}' cannot be both included and excluded.");
+                }
                 _excludedFields.Add(name);
             }
             return this;
@@ -148,43 +166,20 @@ namespace MockingToolkit.PropertyTracking
         }
 
         /// <summary>
-        /// Validates the current configuration for any conflicting rules.
-        /// </summary>
-        /// <exception cref="InvalidTrackingConfigurationException">Thrown if conflicting rules are found.</exception>
-        private void ValidateConfiguration()
-        {
-            var overlappingIncludedExcludedProperties = _includedProperties.Intersect(_excludedProperties);
-            if (overlappingIncludedExcludedProperties.Any())
-            {
-                throw new InvalidTrackingConfigurationException(
-                    $"The following properties are both included and excluded: {string.Join(", ", overlappingIncludedExcludedProperties)}");
-            }
-
-            var overlappingIncludedExcludedFields = _includedFields.Intersect(_excludedFields);
-            if (overlappingIncludedExcludedFields.Any())
-            {
-                throw new InvalidTrackingConfigurationException(
-                    $"The following fields are both included and excluded: {string.Join(", ", overlappingIncludedExcludedFields)}");
-            }
-        }
-
-        /// <summary>
         /// Builds the <see cref="PropertyTrackingConfiguration"/> based on the current builder state.
         /// </summary>
         /// <returns>A new instance of <see cref="PropertyTrackingConfiguration"/>.</returns>
-        /// <exception cref="InvalidTrackingConfigurationException">Thrown if the configuration is invalid.</exception>
         public PropertyTrackingConfiguration Build()
         {
-            ValidateConfiguration();
             return new PropertyTrackingConfiguration(
-                _includedProperties,
-                _excludedProperties,
-                _includedFields,
-                _excludedFields,
-                _propertyInclusionPredicates,
-                _propertyExclusionPredicates,
-                _fieldInclusionPredicates,
-                _fieldExclusionPredicates,
+                _includedProperties.ToFrozenSet(),
+                _excludedProperties.ToFrozenSet(),
+                _includedFields.ToFrozenSet(),
+                _excludedFields.ToFrozenSet(),
+                _propertyInclusionPredicates.ToImmutableList(),
+                _propertyExclusionPredicates.ToImmutableList(),
+                _fieldInclusionPredicates.ToImmutableList(),
+                _fieldExclusionPredicates.ToImmutableList(),
                 _trackNonPublicMembers);
         }
     }

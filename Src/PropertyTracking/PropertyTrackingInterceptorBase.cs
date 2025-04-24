@@ -8,23 +8,36 @@ using MockingToolkit.PropertyTracking.Extensions;
 namespace MockingToolkit.PropertyTracking
 {
     /// <summary>
-    /// Provides an abstract base class for intercepting property and field access.
+    /// Base class for interceptors that track property and field access.
     /// </summary>
     public abstract class PropertyTrackingInterceptorBase
     {
+        private readonly IReadOnlySet<string> _includedProperties;
+        private readonly IReadOnlySet<string> _excludedProperties;
+        private readonly IReadOnlySet<string> _includedFields;
+        private readonly IReadOnlySet<string> _excludedFields;
+        private readonly IReadOnlyList<Func<PropertyInfo, bool>> _propertyInclusionPredicates;
+        private readonly IReadOnlyList<Func<PropertyInfo, bool>> _propertyExclusionPredicates;
+        private readonly IReadOnlyList<Func<FieldInfo, bool>> _fieldInclusionPredicates;
+        private readonly IReadOnlyList<Func<FieldInfo, bool>> _fieldExclusionPredicates;
+        private readonly bool _trackNonPublicMembers;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="PropertyTrackingInterceptorBase"/> class.
         /// </summary>
         /// <param name="configuration">The property tracking configuration.</param>
         protected PropertyTrackingInterceptorBase(PropertyTrackingConfiguration configuration)
         {
-            Configuration = configuration;
+            _includedProperties = configuration.IncludedProperties;
+            _excludedProperties = configuration.ExcludedProperties;
+            _includedFields = configuration.IncludedFields;
+            _excludedFields = configuration.ExcludedFields;
+            _propertyInclusionPredicates = configuration.PropertyInclusionPredicates;
+            _propertyExclusionPredicates = configuration.PropertyExclusionPredicates;
+            _fieldInclusionPredicates = configuration.FieldInclusionPredicates;
+            _fieldExclusionPredicates = configuration.FieldExclusionPredicates;
+            _trackNonPublicMembers = configuration.TrackNonPublicMembers;
         }
-
-        /// <summary>
-        /// Gets the property tracking configuration.
-        /// </summary>
-        protected PropertyTrackingConfiguration Configuration { get; }
 
         /// <summary>
         /// Determines whether a specific property should be tracked based on the configuration.
@@ -33,33 +46,38 @@ namespace MockingToolkit.PropertyTracking
         /// <returns>True if the property should be tracked; otherwise, false.</returns>
         protected virtual bool ShouldTrack(PropertyInfo propertyInfo)
         {
-            if (!Configuration.TrackNonPublicMembers && !propertyInfo.IsPublic())
+            // 1. Check exclusion by name (takes highest precedence)
+            if (_excludedProperties.Contains(propertyInfo.Name))
             {
                 return false;
             }
 
-            if (Configuration.ExcludedProperties.Contains(propertyInfo.Name))
-            {
-                return false;
-            }
-
-            if (Configuration.PropertyExclusionPredicates.Any(predicate => predicate(propertyInfo)))
-            {
-                return false;
-            }
-
-            if (Configuration.IncludedProperties.Contains(propertyInfo.Name))
+            // 2. Check inclusion by name
+            if (_includedProperties.Contains(propertyInfo.Name))
             {
                 return true;
             }
 
-            if (Configuration.PropertyInclusionPredicates.Any(predicate => predicate(propertyInfo)))
+            // 3. Evaluate exclusion predicates
+            if (_propertyExclusionPredicates.Any(predicate => predicate(propertyInfo)))
+            {
+                return false;
+            }
+
+            // 4. Evaluate inclusion predicates
+            if (_propertyInclusionPredicates.Any(predicate => predicate(propertyInfo)))
             {
                 return true;
             }
 
-            // If no explicit include rules, and no exclude rules matched, default to not tracking
-            return Configuration.IncludedProperties.Any() || Configuration.PropertyInclusionPredicates.Any();
+            // 5. Default behavior for non-public members
+            if (!propertyInfo.GetMethod?.IsPublic == true)
+            {
+                return _trackNonPublicMembers;
+            }
+
+            // 6. Default to not tracking if no explicit inclusion rule matches
+            return false;
         }
 
         /// <summary>
@@ -69,33 +87,38 @@ namespace MockingToolkit.PropertyTracking
         /// <returns>True if the field should be tracked; otherwise, false.</returns>
         protected virtual bool ShouldTrack(FieldInfo fieldInfo)
         {
-            if (!Configuration.TrackNonPublicMembers && !fieldInfo.IsPublic)
+            // 1. Check exclusion by name (takes highest precedence)
+            if (_excludedFields.Contains(fieldInfo.Name))
             {
                 return false;
             }
 
-            if (Configuration.ExcludedFields.Contains(fieldInfo.Name))
-            {
-                return false;
-            }
-
-            if (Configuration.FieldExclusionPredicates.Any(predicate => predicate(fieldInfo)))
-            {
-                return false;
-            }
-
-            if (Configuration.IncludedFields.Contains(fieldInfo.Name))
+            // 2. Check inclusion by name
+            if (_includedFields.Contains(fieldInfo.Name))
             {
                 return true;
             }
 
-            if (Configuration.FieldInclusionPredicates.Any(predicate => predicate(fieldInfo)))
+            // 3. Evaluate exclusion predicates
+            if (_fieldExclusionPredicates.Any(predicate => predicate(fieldInfo)))
+            {
+                return false;
+            }
+
+            // 4. Evaluate inclusion predicates
+            if (_fieldInclusionPredicates.Any(predicate => predicate(fieldInfo)))
             {
                 return true;
             }
 
-            // If no explicit include rules, and no exclude rules matched, default to not tracking
-            return Configuration.IncludedFields.Any() || Configuration.FieldInclusionPredicates.Any();
+            // 5. Default behavior for non-public members
+            if (!fieldInfo.IsPublic)
+            {
+                return _trackNonPublicMembers;
+            }
+
+            // 6. Default to not tracking if no explicit inclusion rule matches
+            return false;
         }
 
         /// <summary>
@@ -103,7 +126,6 @@ namespace MockingToolkit.PropertyTracking
         /// </summary>
         /// <param name="memberName">The name of the property or field being accessed.</param>
         protected abstract void PreTrack(string memberName);
-
         /// <summary>
         /// Logic to execute after tracking an access to a property or field.
         /// </summary>

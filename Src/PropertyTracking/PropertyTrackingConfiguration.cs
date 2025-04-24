@@ -38,14 +38,14 @@ namespace MockingToolkit.PropertyTracking
             IReadOnlyList<Func<FieldInfo, bool>> fieldExclusionPredicates,
             bool trackNonPublicMembers)
         {
-            IncludedProperties = (includedProperties ?? new HashSet<string>()).ToFrozenSet();
-            ExcludedProperties = (excludedProperties ?? new HashSet<string>()).ToFrozenSet();
-            IncludedFields = (includedFields ?? new HashSet<string>()).ToFrozenSet();
-            ExcludedFields = (excludedFields ?? new HashSet<string>()).ToFrozenSet();
-            PropertyInclusionPredicates = (propertyInclusionPredicates ?? new List<Func<PropertyInfo, bool>>()).ToImmutableList();
-            PropertyExclusionPredicates = (propertyExclusionPredicates ?? new List<Func<PropertyInfo, bool>>()).ToImmutableList();
-            FieldInclusionPredicates = (fieldInclusionPredicates ?? new List<Func<FieldInfo, bool>>()).ToImmutableList();
-            FieldExclusionPredicates = (fieldExclusionPredicates ?? new List<Func<FieldInfo, bool>>()).ToImmutableList();
+            IncludedProperties = (includedProperties ?? FrozenSet<string>.Empty);
+            ExcludedProperties = (excludedProperties ?? FrozenSet<string>.Empty);
+            IncludedFields = (includedFields ?? FrozenSet<string>.Empty);
+            ExcludedFields = (excludedFields ?? FrozenSet<string>.Empty);
+            PropertyInclusionPredicates = (propertyInclusionPredicates ?? ImmutableList<Func<PropertyInfo, bool>>.Empty);
+            PropertyExclusionPredicates = (propertyExclusionPredicates ?? ImmutableList<Func<PropertyInfo, bool>>.Empty);
+            FieldInclusionPredicates = (fieldInclusionPredicates ?? ImmutableList<Func<FieldInfo, bool>>.Empty);
+            FieldExclusionPredicates = (fieldExclusionPredicates ?? ImmutableList<Func<FieldInfo, bool>>.Empty);
             TrackNonPublicMembers = trackNonPublicMembers;
         }
 
